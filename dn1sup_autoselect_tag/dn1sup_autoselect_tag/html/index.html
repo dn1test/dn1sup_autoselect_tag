@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>DN1Sup AutoSelect Tag — Настройки</title>
+  <link href="https://cdn.jsdelivr.net/npm/@trimble-oss/modus-bootstrap@2.3.2/dist/css/modus-bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="p-3 d-flex flex-column" style="min-height: 100vh;">
+
+  <h6 class="mb-3">Теги автоназначения</h6>
+
+  <div class="mb-3">
+    <label class="form-label" for="tag-dimension">Тег размеров</label>
+    <input type="text" class="form-control" id="tag-dimension" list="tag-options"
+           autocomplete="off" spellcheck="false" placeholder="Dimension">
+  </div>
+
+  <div class="mb-2">
+    <label class="form-label" for="tag-label">Тег текстовых меток</label>
+    <input type="text" class="form-control" id="tag-label" list="tag-options"
+           autocomplete="off" spellcheck="false" placeholder="Label">
+  </div>
+
+  <datalist id="tag-options"></datalist>
+
+  <p class="form-text mb-0">
+    Выберите существующий тег из списка или впишите новое имя — тег создастся
+    при первом назначении.
+  </p>
+
+  <div class="mt-auto d-flex justify-content-end gap-2 pt-3">
+    <button type="button" class="btn btn-outline-secondary" id="btn-cancel">Отмена</button>
+    <button type="button" class="btn btn-primary" id="btn-save">Сохранить</button>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var dimensionInput = document.getElementById('tag-dimension');
+      var labelInput = document.getElementById('tag-label');
+      var tagOptions = document.getElementById('tag-options');
+
+      function callRuby(action, payload) {
+        if (window.sketchup && typeof window.sketchup.call_ruby === 'function') {
+          window.sketchup.call_ruby(action, payload);
+          return true;
+        }
+        return false;
+      }
+
+      // Ruby -> JS: настройки и список тегов активной модели.
+      window.loadSettings = function (data) {
+        dimensionInput.value = data.dimension || '';
+        labelInput.value = data.label || '';
+        tagOptions.innerHTML = '';
+        (data.tags || []).forEach(function (name) {
+          var option = document.createElement('option');
+          option.value = name;
+          tagOptions.appendChild(option);
+        });
+      };
+
+      function save() {
+        callRuby('save', JSON.stringify({
+          dimension: dimensionInput.value.trim(),
+          label: labelInput.value.trim()
+        }));
+      }
+
+      document.getElementById('btn-save').addEventListener('click', save);
+      document.getElementById('btn-cancel').addEventListener('click', function () {
+        callRuby('cancel');
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          callRuby('cancel');
+        } else if (event.key === 'Enter' && event.target.tagName === 'INPUT') {
+          save();
+        }
+      });
+
+      // Мост sketchup.* появляется в странице позже загрузки (и execute_script
+      // до окончания загрузки теряется) — ретраим 'ready', пока не дойдёт.
+      // Ruby заполняет поля только в ответ на 'ready' (push_settings).
+      [0, 100, 250, 500, 1000, 2000].forEach(function (delay) {
+        setTimeout(function () { callRuby('ready'); }, delay);
+      });
+
+      // Заглушка для проверки вёрстки в обычном браузере: перезаписывается
+      // настоящими настройками, когда 'ready' доходит до Ruby.
+      window.loadSettings({
+        dimension: 'Dimension',
+        label: 'Label',
+        tags: ['Dimension', 'Label', 'Layer0', 'Размеры', 'Метки']
+      });
+    })();
+  </script>
+</body>
+</html>

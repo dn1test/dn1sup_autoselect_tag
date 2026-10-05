@@ -1,7 +1,8 @@
 # auto tag create and move object dimensions and labels to a self-named tag
 # version 1.0
-# by dn1sucode
+# dn1sucode (destudios@gmail.com)
 # 04.02.2026
+# License: MIT
 
 module AutoTagDimensionLabel
   TAG_DIMENSION = "Dimension"
