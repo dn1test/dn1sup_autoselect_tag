@@ -7,6 +7,13 @@ rescue LoadError
 end
 
 module Dn1sup
+  def self.common_menu
+    @common_menu ||= begin
+      legacy = (defined?($dn1sup_common_menu) && $dn1sup_common_menu) || (defined?($dn1sup_menu) && $dn1sup_menu)
+      legacy || UI.menu('Extensions').add_submenu('DN1SUP')
+    end
+  end
+
   module AutoSelectTag
     ID      = 'dn1sup_autoselect_tag'
     VERSION = '0.3.0'
@@ -171,22 +178,14 @@ module Dn1sup
     # --- Меню -----------------------------------------------------------------
 
     # Общий корень меню всех расширений DN1SUP («Расширения» → DN1SUP).
-    # Sketchup::Menu не умеет ни искать подменю по имени, ни удалять пункты,
-    # поэтому корень кэшируется в глобальных переменных на всю сессию:
-    # первое загрузившееся расширение создаёт его, остальные переиспользуют.
-    # Читаем и пишем обе глобальные — $dn1sup_menu (соглашение Comp Add View)
-    # и $dn1sup_common_menu (Time Project 2), — чтобы корень не задваивался
-    # при любом порядке загрузки расширений.
+    # Кэшируется в корневом модуле Dn1sup.common_menu без глобальных переменных.
     def common_menu
-      menu = $dn1sup_common_menu || $dn1sup_menu
-      menu ||= UI.menu('Extensions').add_submenu('DN1SUP')
-      $dn1sup_common_menu = $dn1sup_menu = menu
-      menu
+      Dn1sup.common_menu
     end
 
     # Устанавливает меню, наблюдателей и отложенную проверку обновлений;
     # вызывается при каждой загрузке файла — повторный вход безопасен.
-    # Своё подменю охраняет $dn1sup_menu_autoselect_tag (глобал переживает
+    # Своё подменю охраняет @menu_autoselect_tag (глобал переживает
     # перезагрузку, подменю создаётся один раз за сессию), а пункты
     # dispatch-атся через полные пути констант, поэтому после горячей
     # перезагрузки вызывают уже свежий код.
@@ -195,8 +194,8 @@ module Dn1sup
 
       install
 
-      unless $dn1sup_menu_autoselect_tag
-        menu = $dn1sup_menu_autoselect_tag = common_menu.add_submenu('AutoSelect Tag')
+      unless @menu_autoselect_tag
+        menu = @menu_autoselect_tag = common_menu.add_submenu('AutoSelect Tag')
         menu.add_item('Настройки...') { Dn1sup::AutoSelectTag::SettingsDialog.show }
         menu.add_separator
         menu.add_item('Проверить обновления сейчас') do
