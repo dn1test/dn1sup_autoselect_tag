@@ -16,7 +16,7 @@ module Dn1sup
 
   module AutoSelectTag
     ID      = 'dn1sup_autoselect_tag'
-    VERSION = '0.3.0'
+    VERSION = '0.4.0'
     REPO    = 'dn1test/sketchup-dn1sup-extensions'
     ASSET   = "#{ID}.rbz"
     PAGE_URL = "https://github.com/#{REPO}/releases"
@@ -42,21 +42,60 @@ module Dn1sup
     end
 
     # Назначает тег сущности; сущности без поддержки тегов молча пропускаются.
+    # Пустое имя (правило не сработало) — ничего не делает.
     def assign_tag(model, entity, name)
+      return false if name.nil? || name.to_s.strip.empty?
       tag = ensure_tag(model, name)
-      return if entity.layer == tag
+      return false if entity.layer == tag
       entity.layer = tag
+      true
     rescue StandardError
-      nil
+      false
     end
 
-    # Имена тегов берутся из настроек (Config) — действуют сразу после смены.
+    # Имя тега для сущности или nil, если подходящего правила нет.
+    # Для компонентов (см. tag_name_for_component) nil — «не трогать»,
+    # поэтому вызывать только после taggable?.
     def tag_name_for(entity)
-      entity.is_a?(Sketchup::Dimension) ? Config.tag_dimension : Config.tag_label
+      case entity
+      when Sketchup::Dimension then Config.tag_dimension
+      when Sketchup::Text      then Config.tag_label
+      else tag_name_for_component(entity)
+      end
     end
 
     def taggable?(entity)
-      entity.is_a?(Sketchup::Dimension) || entity.is_a?(Sketchup::Text)
+      case entity
+      when Sketchup::Dimension, Sketchup::Text then true
+      else !tag_name_for_component(entity).nil?
+      end
+    end
+
+    # --- Правила «имя компонента → тег» -------------------------------------
+
+    # Имена компонента для сверки с правилами: имя экземпляра и имя определения.
+    def component_name_candidates(entity)
+      return [] unless entity.is_a?(Sketchup::ComponentInstance)
+      names = [entity.name]
+      names << entity.definition.name if entity.definition
+      names.reject { |name| name.to_s.strip.empty? }
+    end
+
+    # Имя тега первого сработавшего правила или nil.
+    def tag_name_for_component(entity)
+      rule_tag_for_names(component_name_candidates(entity))
+    end
+
+    # Чистая сверка имён с правилами: имя тега первого правила, у которого
+    # любое слово-триггер входит в любое из имён (без учёта регистра), или nil.
+    # Правила проверяются в порядке настройки — первое совпадение выигрывает.
+    def rule_tag_for_names(names)
+      return nil if names.empty?
+      lowered = names.map(&:downcase)
+      rule = Config.name_rules.find do |candidate|
+        candidate[:words].any? { |word| lowered.any? { |name| name.include?(word) } }
+      end
+      rule && rule[:tag]
     end
 
     # Менять модель внутри onElementAdded небезопасно (элемент ещё создаётся
@@ -89,11 +128,62 @@ module Dn1sup
       nil
     end
 
+    # --- Массовое применение правил -------------------------------------------
+
+    # Переназначает теги существующим размерам/меткам и применяет правила
+    # «имя → тег» к компонентам — одна операция Undo. Верхний уровень модели
+    # плюс все определения (вложенные определения тоже лежат в model.definitions).
+    def retag_existing(model)
+      model.start_operation('DN1Sup AutoSelect Tag: применить правила тегов', true)
+      count = retag_model_entities(model)
+      model.commit_operation
+      count
+    rescue StandardError
+      model.abort_operation
+      raise
+    end
+
+    def retag_model_entities(model)
+      count = 0
+      model.entities.each { |entity| count += 1 if retag_entity(model, entity) }
+      model.definitions.each do |definition|
+        next if definition.nil? || definition.image?
+        definition.entities.each { |entity| count += 1 if retag_entity(model, entity) }
+      end
+      count
+    end
+
+    def retag_entity(model, entity)
+      return false if entity.respond_to?(:deleted?) && entity.deleted?
+      return false unless taggable?(entity)
+      assign_tag(model, entity, tag_name_for(entity))
+    end
+
+    # Пункт меню: применить правила к активной модели с отчётом пользователю.
+    def apply_rules_to_model
+      model = Sketchup.active_model
+      return if model.nil?
+      count = retag_existing(model)
+      UI.messagebox("DN1Sup AutoSelect Tag\r\n\r\nПеренесено в теги: #{count}")
+    rescue StandardError => e
+      UI.messagebox("DN1Sup AutoSelect Tag: #{e.class}: #{e.message}")
+    end
+
     # --- Наблюдатели ----------------------------------------------------------
 
     # Назначает теги новым размерам и меткам по мере их появления.
     class EntitiesObserver < Sketchup::EntitiesObserver
       def onElementAdded(entities, entity)
+        model = entities.respond_to?(:model) ? entities.model : Sketchup.active_model
+        AutoSelectTag.defer_assign(model, entity)
+      rescue StandardError
+        nil
+      end
+
+      # Переименование компонента (Entity Info) не порождает нового элемента:
+      # модификация перепроверяет правило тем же отложенным способом,
+      # назначение идемпотентно.
+      def onElementModified(entities, entity)
         model = entities.respond_to?(:model) ? entities.model : Sketchup.active_model
         AutoSelectTag.defer_assign(model, entity)
       rescue StandardError
@@ -161,10 +251,13 @@ module Dn1sup
     end
 
     # Dev-режим: перезагрузка всех файлов расширения без рестарта SketchUp.
+    # Тесты не загружаются: run_all.rb прогоняет сюиту и вызывает exit.
     def reload(clear_console = true, undo = false)
       verbose = $VERBOSE
       $VERBOSE = nil
-      Dir.glob(File.join(PLUGIN_DIR, '**/*.{rb,rbe}')).each { |f| load(f) }
+      files = Dir.glob(File.join(PLUGIN_DIR, '**/*.{rb,rbe}'))
+      files.reject! { |f| f.tr('\\', '/').include?('/test/') }
+      files.each { |f| load(f) }
       $VERBOSE = verbose
       UI.start_timer(0, false) { SKETCHUP_CONSOLE.clear } if clear_console && defined?(SKETCHUP_CONSOLE)
       Sketchup.undo if undo
@@ -197,6 +290,9 @@ module Dn1sup
       unless @menu_autoselect_tag
         menu = @menu_autoselect_tag = common_menu.add_submenu('AutoSelect Tag')
         menu.add_item('Настройки...') { Dn1sup::AutoSelectTag::SettingsDialog.show }
+        menu.add_item('Применить правила к модели') do
+          Dn1sup::AutoSelectTag.apply_rules_to_model
+        end
         menu.add_separator
         menu.add_item('Проверить обновления сейчас') do
           Dn1sup::Updater.check!(Dn1sup::AutoSelectTag::MANIFEST.merge(force: true, async: true))

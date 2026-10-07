@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <title>DN1Sup AutoSelect Tag — Настройки</title>
   <link href="https://cdn.jsdelivr.net/npm/@trimble-oss/modus-bootstrap@2.3.2/dist/css/modus-bootstrap.min.css" rel="stylesheet">
+  <style>
+    .rule-row .form-control { min-width: 0; }
+    .rule-row .btn-remove { padding-left: .4rem; padding-right: .4rem; }
+  </style>
 </head>
 <body class="p-3 d-flex flex-column" style="min-height: 100vh;">
 
@@ -21,9 +25,24 @@
            autocomplete="off" spellcheck="false" placeholder="Label">
   </div>
 
-  <datalist id="tag-options"></datalist>
+  <hr>
+
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0">Правила по имени компонента</h6>
+    <button type="button" class="btn btn-outline-primary btn-sm" id="btn-add-rule">+ Добавить правило</button>
+  </div>
+
+  <div id="rules"></div>
 
   <p class="form-text mb-0">
+    Компонент, в имени экземпляра или определения которого есть любое из
+    слов-триггеров (без учёта регистра), переносится в тег правила. Правила
+    проверяются сверху вниз — первое совпадение выигрывает.
+  </p>
+
+  <datalist id="tag-options"></datalist>
+
+  <p class="form-text mb-0 mt-2">
     Выберите существующий тег из списка или впишите новое имя — тег создастся
     при первом назначении.
   </p>
@@ -39,6 +58,7 @@
 
       var dimensionInput = document.getElementById('tag-dimension');
       var labelInput = document.getElementById('tag-label');
+      var rulesBox = document.getElementById('rules');
       var tagOptions = document.getElementById('tag-options');
 
       function callRuby(action, payload) {
@@ -49,10 +69,76 @@
         return false;
       }
 
-      // Ruby -> JS: настройки и список тегов активной модели.
+      // --- Редактор правил --------------------------------------------------
+
+      function addRuleRow(trigger, tag) {
+        var row = document.createElement('div');
+        row.className = 'row g-2 align-items-center rule-row mb-2';
+
+        var colTrigger = document.createElement('div');
+        colTrigger.className = 'col-7';
+        var triggerInput = document.createElement('input');
+        triggerInput.type = 'text';
+        triggerInput.className = 'form-control form-control-sm rule-trigger';
+        triggerInput.placeholder = 'слова-триггеры через запятую';
+        triggerInput.autocomplete = 'off';
+        triggerInput.spellcheck = false;
+        triggerInput.value = trigger || '';
+        colTrigger.appendChild(triggerInput);
+
+        var colTag = document.createElement('div');
+        colTag.className = 'col-4';
+        var tagInput = document.createElement('input');
+        tagInput.type = 'text';
+        tagInput.className = 'form-control form-control-sm rule-tag';
+        tagInput.placeholder = 'тег';
+        tagInput.setAttribute('list', 'tag-options');
+        tagInput.autocomplete = 'off';
+        tagInput.spellcheck = false;
+        tagInput.value = tag || '';
+        colTag.appendChild(tagInput);
+
+        var colRemove = document.createElement('div');
+        colRemove.className = 'col-auto';
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-outline-danger btn-sm btn-remove';
+        removeBtn.title = 'Удалить правило';
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', function () { row.remove(); });
+        colRemove.appendChild(removeBtn);
+
+        row.appendChild(colTrigger);
+        row.appendChild(colTag);
+        row.appendChild(colRemove);
+        rulesBox.appendChild(row);
+      }
+
+      function collectRules() {
+        var rules = [];
+        rulesBox.querySelectorAll('.rule-row').forEach(function (row) {
+          var trigger = row.querySelector('.rule-trigger').value.trim();
+          var tag = row.querySelector('.rule-tag').value.trim();
+          if (trigger || tag) {
+            rules.push({ trigger: trigger, tag: tag });
+          }
+        });
+        return rules;
+      }
+
+      document.getElementById('btn-add-rule').addEventListener('click', function () {
+        addRuleRow('', '');
+        rulesBox.lastElementChild.querySelector('.rule-trigger').focus();
+      });
+
+      // Ruby -> JS: настройки, правила и список тегов активной модели.
       window.loadSettings = function (data) {
         dimensionInput.value = data.dimension || '';
         labelInput.value = data.label || '';
+        rulesBox.innerHTML = '';
+        (data.rules || []).forEach(function (rule) {
+          addRuleRow(rule.trigger || '', rule.tag || '');
+        });
         tagOptions.innerHTML = '';
         (data.tags || []).forEach(function (name) {
           var option = document.createElement('option');
@@ -64,7 +150,8 @@
       function save() {
         callRuby('save', JSON.stringify({
           dimension: dimensionInput.value.trim(),
-          label: labelInput.value.trim()
+          label: labelInput.value.trim(),
+          rules: collectRules()
         }));
       }
 
@@ -92,7 +179,11 @@
       window.loadSettings({
         dimension: 'Dimension',
         label: 'Label',
-        tags: ['Dimension', 'Label', 'Layer0', 'Размеры', 'Метки']
+        rules: [
+          { trigger: 'дверь, дверь двусторонняя', tag: 'Двери' },
+          { trigger: 'фасад', tag: 'Фасады' }
+        ],
+        tags: ['Dimension', 'Label', 'Layer0', 'Размеры', 'Метки', 'Двери', 'Фасады']
       });
     })();
   </script>

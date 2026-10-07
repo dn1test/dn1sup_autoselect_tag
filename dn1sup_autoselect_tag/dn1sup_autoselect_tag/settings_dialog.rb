@@ -4,9 +4,9 @@ require 'json'
 
 module Dn1sup
   module AutoSelectTag
-    # Диалог настроек: выбор имени тега для размеров и текстовых меток.
-    # В поле выбирается существующий тег модели или вписывается новое имя —
-    # тег будет создан при первом назначении.
+    # Диалог настроек: теги размеров/меток и правила «слова-триггеры → тег»
+    # для компонентов. В поле выбирается существующий тег модели или вписывается
+    # новое имя — тег будет создан при первом назначении.
     module SettingsDialog
       module_function
 
@@ -22,10 +22,10 @@ module Dn1sup
         @dialog = UI::HtmlDialog.new(
           dialog_title:    'DN1Sup AutoSelect Tag — Настройки',
           preferences_key: 'dn1sup_autoselect_tag_settings',
-          scrollable:      false,
-          resizable:       false,
-          width:           440,
-          height:          380,
+          scrollable:      true,
+          resizable:       true,
+          width:           480,
+          height:          560,
           style:           UI::HtmlDialog::STYLE_DIALOG
         )
         attach_callbacks
@@ -63,11 +63,12 @@ module Dn1sup
 
       # --- Ruby -> JS ---------------------------------------------------------
 
-      # Текущие настройки и список тегов активной модели.
+      # Текущие настройки, правила и список тегов активной модели.
       def push_settings
         data = {
           dimension: Config.tag_dimension,
           label:     Config.tag_label,
+          rules:     Config.name_rules.map { |rule| { trigger: rule[:words].join(', '), tag: rule[:tag] } },
           tags:      Sketchup.active_model.layers.map(&:name).sort
         }
         @dialog.execute_script("window.loadSettings(#{JSON.generate(data)});")
@@ -75,58 +76,24 @@ module Dn1sup
 
       # --- JS -> Ruby ---------------------------------------------------------
 
-      # json — строка {"dimension": "...", "label": "..."}.
+      # json — строка {"dimension": "...", "label": "...", "rules": [...]}.
       def apply_settings(json)
         data = JSON.parse(json.to_s)
         raise ArgumentError, 'Ожидался объект настроек' unless data.is_a?(Hash)
 
         Config.tag_dimension = data['dimension']
         Config.tag_label     = data['label']
+        Config.name_rules    = data['rules']
         close
         offer_retag
       end
 
       def offer_retag
         answer = UI.messagebox(
-          "Теги сохранены.\r\n\r\nПереназначить новые теги существующим размерам и меткам в модели?",
+          "Настройки сохранены.\r\n\r\nПрименить их к существующим размерам, меткам и компонентам в модели?",
           MB_YESNO
         )
         retag_existing(Sketchup.active_model) if answer == IDYES
-      end
-
-      # Переназначение существующих размеров/меток — одна операция Undo.
-      def retag_existing(model)
-        model.start_operation('DN1Sup AutoSelect Tag: переназначить теги', true)
-        count = retag_model_entities(model)
-        model.commit_operation
-        puts "DN1Sup AutoSelect Tag: переназначено сущностей: #{count}" if count.positive?
-        count
-      rescue StandardError
-        model.abort_operation
-        raise
-      end
-
-      # Верхний уровень модели плюс все определения компонентов (вложенные
-      # определения тоже лежат в model.definitions).
-      def retag_model_entities(model)
-        count = 0
-        model.entities.each { |entity| count += 1 if retag_entity(model, entity) }
-        model.definitions.each do |definition|
-          next if definition.nil? || definition.image?
-          definition.entities.each { |entity| count += 1 if retag_entity(model, entity) }
-        end
-        count
-      end
-
-      def retag_entity(model, entity)
-        return false if entity.respond_to?(:deleted?) && entity.deleted?
-        return false unless AutoSelectTag.taggable?(entity)
-
-        tag = AutoSelectTag.ensure_tag(model, AutoSelectTag.tag_name_for(entity))
-        return false if entity.layer == tag
-
-        entity.layer = tag
-        true
       end
     end
   end
