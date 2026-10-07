@@ -10,7 +10,7 @@ module Dn1sup
   def self.common_menu
     @common_menu ||= begin
       legacy = (defined?($dn1sup_common_menu) && $dn1sup_common_menu) || (defined?($dn1sup_menu) && $dn1sup_menu)
-      legacy || UI.menu('Extensions').add_submenu('DN1SUP')
+      legacy || UI.menu('Extensions').add_submenu('DN1Sup')
     end
   end
 
@@ -177,7 +177,7 @@ module Dn1sup
 
     # --- Меню -----------------------------------------------------------------
 
-    # Общий корень меню всех расширений DN1SUP («Расширения» → DN1SUP).
+    # Общий корень меню всех расширений DN1Sup («Расширения» → DN1Sup).
     # Кэшируется в корневом модуле Dn1sup.common_menu без глобальных переменных.
     def common_menu
       Dn1sup.common_menu
