@@ -7,6 +7,7 @@ rescue LoadError
 end
 require 'net/http'
 require 'uri'
+require 'time'
 
 # Dn1sup::Updater — общий модуль автообновления через GitHub Releases.
 #
@@ -89,11 +90,89 @@ module Dn1sup
       require 'json'
       uri = URI.parse("#{GITHUB_API}/repos/#{repo}/releases/latest")
       res = http_get(uri)
-      return {} unless res.is_a?(Net::HTTPSuccess)
-      JSON.parse(res.body)
+      unless res.is_a?(Net::HTTPSuccess)
+        log_debug("latest_release(#{repo}): HTTP #{res.respond_to?(:code) ? res.code : '?'}")
+        return {}
+      end
+      json = JSON.parse(res.body)
+      log_debug("latest_release(#{repo}): OK #{json['tag_name'].to_s}")
+      json
     rescue StandardError, ScriptError => e
       log_error(e)
       {}
+    end
+
+    # GET https://api.github.com/repos/{owner}/{repo}/releases?per_page=N
+    # Возвращает Array JSON-объектов (новые раньше старых) или [] при любой
+    # ошибке (сеть, лимиты и т.п.).
+    def releases(repo, per_page: 20)
+      require 'net/http'
+      require 'json'
+      uri = URI.parse("#{GITHUB_API}/repos/#{repo}/releases?per_page=#{per_page.to_i}")
+      res = http_get(uri)
+      unless res.is_a?(Net::HTTPSuccess)
+        log_debug("releases(#{repo}): HTTP #{res.respond_to?(:code) ? res.code : '?'}")
+        return []
+      end
+      json = JSON.parse(res.body)
+      list = json.is_a?(Array) ? json : []
+      log_debug("releases(#{repo}): OK #{list.size} релизов")
+      list
+    rescue StandardError, ScriptError => e
+      log_error(e)
+      []
+    end
+
+    # Все репозитории аккаунта/организации (для автопоиска расширений).
+    # GET /users/{owner}/repos, а если аккаунт — организация, фолбэк на
+    # /orgs/{owner}/repos. Возвращает Array JSON-объектов или [] при ошибке.
+    def repos_of_owner(owner)
+      require 'net/http'
+      require 'json'
+      owner = owner.to_s
+      %w[users orgs].each do |segment|
+        uri = URI.parse("#{GITHUB_API}/#{segment}/#{owner}/repos?per_page=100&sort=pushed")
+        res = http_get(uri)
+        next unless res.is_a?(Net::HTTPSuccess)
+
+        json = JSON.parse(res.body)
+        if json.is_a?(Array)
+          log_debug("repos_of_owner(#{owner}): OK #{json.size} репозиториев (/#{segment}/)")
+          return json
+        end
+      end
+      log_debug("repos_of_owner(#{owner}): недоступно")
+      []
+    rescue StandardError, ScriptError => e
+      log_error(e)
+      []
+    end
+
+    # Лог правок между двумя тегами: первые строки сообщений коммитов.
+    # GET /repos/{repo}/compare/{base}...{head}. Возвращает Array строк
+    # (до limit) или [] при любой ошибке (тега нет, сеть и т.п.).
+    def compare_commits(repo, base, head, limit: 15)
+      require 'net/http'
+      require 'json'
+      base_s = URI.encode_www_form_component(base.to_s)
+      head_s = URI.encode_www_form_component(head.to_s)
+      uri = URI.parse("#{GITHUB_API}/repos/#{repo}/compare/#{base_s}...#{head_s}")
+      res = http_get(uri)
+      return [] unless res.is_a?(Net::HTTPSuccess)
+
+      json = JSON.parse(res.body)
+      commits = json.is_a?(Hash) && json['commits'].is_a?(Array) ? json['commits'] : []
+      msgs = commits.first(limit.to_i).map do |c|
+        msg = c.is_a?(Hash) && c['commit'].is_a?(Hash) ? c['commit']['message'].to_s : ''
+        first = msg.split(/\r?\n/).first.to_s.strip
+        first.empty? ? nil : first
+      end
+      msgs.compact! || msgs
+      log_debug("compare_commits(#{repo}, #{base}...#{head}): OK #{msgs.size} коммитов")
+      msgs
+    rescue StandardError, ScriptError => e
+      log_error(e)
+      []
     end
 
     # Скачивает произвольный URL в файл. Возвращает путь или nil.
@@ -186,21 +265,88 @@ module Dn1sup
       false
     end
 
+    # Время публикации релиза; неизвестное/битое — начало эпохи («самое старое»).
+    def release_time(release)
+      t = Time.parse(release['published_at'].to_s)
+      t || Time.at(0)
+    rescue StandardError, ArgumentError
+      Time.at(0)
+    end
+
+    # Новейший стабильный релиз списка (без draft/prerelease) по дате публикации.
+    # /releases/latest у GitHub возвращает последний ОПУБЛИКОВАННЫЙ релиз, поэтому
+    # после нестандартной публикации (напр. 0.4.1 поверх серии 2.4.x) «latest»
+    # может оказаться ниже установленной версии — предлагаемый релиз выбираем
+    # сами из полного списка.
+    def choose_release(list)
+      stable = list.to_a.find_all do |r|
+        r.is_a?(Hash) && !r['tag_name'].to_s.empty? && !r['draft'] && !r['prerelease']
+      end
+      stable.max_by { |r| release_time(r) }
+    end
+
+    # Статус установленной версии относительно предлагаемого (новейшего по дате)
+    # релиза:
+    #   'update'  — предлагаемый релиз новее по номеру версии;
+    #   'switch'  — релиз новее по ДАТЕ публикации, но не выше по номеру (смена
+    #               схемы нумерации, напр. 2.4.1 -> 0.4.1, либо переизпуск той
+    #               же версии): предлагаем установку, если дата установленной
+    #               сборки определена — по релизу из списка, а при его
+    #               отсутствии по дате установки (installed_at, unixtime);
+    #   'current' — версии совпадают;
+    #   nil       — нет данных (релизы недоступны или расширение не установлено).
+    def product_status(installed_ver, offered, list = nil, installed_at: nil)
+      return nil if installed_ver.to_s.empty? || offered.nil? || offered['tag_name'].to_s.empty?
+
+      tag  = offered['tag_name'].to_s.sub(/\Av/i, '')
+      inst = installed_ver.to_s.sub(/\Av/i, '')
+      if tag == inst
+        # Переизпуск той же версии: релиз опубликован позже установленной сборки.
+        return 'switch' if installed_at.to_i > 0 && release_time(offered).to_i > installed_at.to_i
+
+        return 'current'
+      end
+      return 'update'  if newer?(norm_version(tag), norm_version(inst))
+
+      inst_release = list.to_a.find do |r|
+        r.is_a?(Hash) && r['tag_name'].to_s.sub(/\Av/i, '') == inst
+      end
+      if inst_release
+        return release_time(offered) > release_time(inst_release) ? 'switch' : nil
+      end
+
+      # Релиз установленной версии не найден в списке (снапшот хранит лишь
+      # последние 10, установка давно) — fallback на дату установки.
+      return nil unless installed_at.to_i > 0
+
+      release_time(offered).to_i > installed_at.to_i ? 'switch' : nil
+    end
+
     # Установка .rbz с любого URL через официальный Sketchup.install_from_archive.
-    def install_from_url(url, what = 'расширение', silent = false)
+    # id — идентификатор расширения: при успешной установке фиксируется дата
+    # сборки (installed_at_<id>), по которой потом распознаются переизданные
+    # релизы без бампа версии.
+    def install_from_url(url, what = 'расширение', silent = false, id: nil)
       url = url.to_s
-      return false if url.empty?
+      if url.empty?
+        log_debug("install_from_url(#{what}): пустой URL — отмена")
+        return false
+      end
       unless defined?(Sketchup) && Sketchup.respond_to?(:install_from_archive)
+        log_debug("install_from_url(#{what}): install_from_archive недоступен")
         inform("#{what}: Sketchup.install_from_archive недоступен в этой версии SketchUp.") unless silent
         return false
       end
+      log_debug("install_from_url(#{what}): скачивание #{url}")
       path = download_to_temp(url)
       unless path
+        log_debug("install_from_url(#{what}): скачивание не удалось")
         inform("#{what}: не удалось скачать обновление.\n" \
                'Проверьте соединение или скачайте .rbz вручную со страницы релиза.') unless silent
         return false
       end
       unless rbz?(path)
+        log_debug("install_from_url(#{what}): файл #{File.basename(path)} не похож на .rbz")
         inform("#{what}: скачанный файл не похож на .rbz — вероятно, ошибка сети. Попробуйте позже.") unless silent
         return false
       end
@@ -211,7 +357,9 @@ module Dn1sup
         log_error(e)
         false
       end
+      log_debug("install_from_url(#{what}): install_from_archive -> #{ok ? 'OK' : 'FAIL'}")
       if ok
+        mark_installed(id) if id
         inform("#{what}: обновление установлено.\n\n" \
                'Перезапустите SketchUp, чтобы новый код загрузился.') unless silent
       else
@@ -224,15 +372,23 @@ module Dn1sup
 
     # --- internals ---------------------------------------------------------
 
-    # Сетевая часть проверки (может выполняться в фоне): { release:, latest: } или nil.
-    # latest — per-extension версия из registry.json либо тег релиза.
+    # Сетевая часть проверки (может выполняться в фоне):
+    # { release:, latest:, from_registry: } или nil.
+    # latest — per-extension версия из registry.json либо тег релиза;
+    # from_registry показывает источник latest — от него зависит, можно ли
+    # сравнивать дату релиза с датой установки (в монорепо тег релиза может
+    # описывать другое расширение).
     def fetch_latest(cfg)
       release = latest_release(cfg[:repo].to_s)
       return nil unless release.is_a?(Hash) && release.key?('tag_name')
 
       entry = registry_entry(cfg[:repo].to_s, cfg[:id].to_s)
       ver   = entry.is_a?(Hash) ? entry['version'].to_s : ''
-      { release: release, latest: ver != '' ? ver : release['tag_name'].to_s }
+      if ver != ''
+        { release: release, latest: ver, from_registry: true }
+      else
+        { release: release, latest: release['tag_name'].to_s, from_registry: false }
+      end
     end
 
     # UI-часть проверки (главный поток). Возвращает summary или nil.
@@ -247,9 +403,16 @@ module Dn1sup
 
       latest  = norm_version(fetched[:latest])
       current = norm_version(cfg[:version].to_s)
+      same_version = false
       unless newer?(latest, current)
-        inform("#{id_str}: у вас уже установлена актуальная версия (#{cfg[:version]}).") if force && !silent
-        return nil
+        # Номер версии не новее — смотрим на дату публикации релиза: релиз,
+        # изданный позже установленной сборки (переизпуск без бампа версии,
+        # смена схемы нумерации), тоже считается обновлением.
+        unless release_newer_than_install?(cfg, fetched)
+          inform("#{id_str}: у вас уже установлена актуальная версия (#{cfg[:version]}).") if force && !silent
+          return nil
+        end
+        same_version = true
       end
 
       release = fetched[:release]
@@ -261,8 +424,24 @@ module Dn1sup
         page_url:  release['html_url'].to_s,
         asset_url: asset_url(release, cfg[:asset].to_s)
       }
+      summary[:same_version] = true if same_version
       offer_install(summary, background: !force) unless silent
       summary
+    end
+
+    # Релиз издан позже установленной сборки? Сравнение возможно, только когда
+    # известна дата установки текущей версии (пишется при установке через
+    # апдейтер/Store) и релиз относится к этому расширению: в монорепо тег
+    # релиза может описывать другое расширение, тогда его дата ничего не
+    # говорит об этом расширении (версия из registry.json авторитетна).
+    def release_newer_than_install?(cfg, fetched)
+      return false if fetched[:from_registry] &&
+                      fetched[:latest].to_s != fetched[:release]['tag_name'].to_s.sub(/\Av/, '')
+
+      inst_time = installed_at(cfg[:id])
+      return false unless inst_time
+
+      release_time(fetched[:release]).to_i > inst_time
     end
 
     # Запись расширения из registry.json репозитория (источник per-extension версий).
@@ -308,6 +487,23 @@ module Dn1sup
       nil
     end
 
+    # Дата установки текущей сборки расширения (unixtime) или nil, если
+    # неизвестна (расширение ставилось не через апдейтер/Store).
+    def installed_at(id)
+      return nil unless defined?(Sketchup)
+      v = Sketchup.read_default(SECTION, "installed_at_#{id}")
+      v.to_i > 0 ? v.to_i : nil
+    rescue StandardError
+      nil
+    end
+
+    def mark_installed(id, time = Time.now)
+      return unless defined?(Sketchup)
+      Sketchup.write_default(SECTION, "installed_at_#{id}", time.to_i)
+    rescue StandardError
+      nil
+    end
+
     # Асинхронный режим имеет смысл только в живом SketchUp с таймерами UI.
     def async_ui?
       defined?(UI) && UI.respond_to?(:start_timer) &&
@@ -319,8 +515,8 @@ module Dn1sup
       loop do
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl      = (uri.scheme == 'https')
-        http.open_timeout = 10
-        http.read_timeout = 60
+        http.open_timeout = 4
+        http.read_timeout = 6
         req = Net::HTTP::Get.new(uri.request_uri, HEADERS)
         if uri.host == 'api.github.com' && ENV['GITHUB_TOKEN'] && !ENV['GITHUB_TOKEN'].empty?
           req['Authorization'] = "Bearer #{ENV['GITHUB_TOKEN']}"
@@ -365,8 +561,7 @@ module Dn1sup
 
       note = UI::Notification.new(
         summary[:id].to_s,
-        "Доступна версия #{summary[:latest]} (у вас #{summary[:current]}).\n" \
-        'Нажмите, чтобы открыть страницу релиза.'
+        "#{update_headline(summary)}Нажмите, чтобы открыть страницу релиза."
       )
       note.onclick { open_url(summary[:page_url]) }
       note.show
@@ -376,19 +571,30 @@ module Dn1sup
       false
     end
 
+    # Заголовок уведомления об обновлении. При переизпуске той же версии
+    # «доступна версия X (у вас X)» сбивает с толку — формулируем через дату.
+    def update_headline(summary)
+      if summary[:same_version]
+        "Опубликована обновлённая сборка версии #{summary[:latest]} " \
+          "(ваша установлена раньше).\n"
+      else
+        "Доступна версия #{summary[:latest]} (у вас #{summary[:current]}).\n"
+      end
+    end
+
     # Диалог установки (YES/NO) — по явному запросу пользователя.
     def offer_dialog(summary)
       if summary[:asset_url].to_s.empty?
-        return unless ask("#{summary[:id]}: доступна версия #{summary[:latest]} " \
-                          "(у вас #{summary[:current]}).\nОткрыть страницу релизов?")
+        return unless ask("#{summary[:id]}: #{update_headline(summary)}" \
+                          'Открыть страницу релизов?')
         open_url(summary[:page_url])
         return
       end
-      msg = "#{summary[:id]}: доступна версия #{summary[:latest]} (у вас #{summary[:current]}).\n" \
+      msg = "#{summary[:id]}: #{update_headline(summary)}" \
             "\n#{short_notes(summary[:notes])}\n" \
             "\nСкачать и установить обновление сейчас?"
       return unless ask(msg)
-      install_from_url(summary[:asset_url], summary[:id])
+      install_from_url(summary[:asset_url], summary[:id], false, id: summary[:id])
     end
 
     # .rbz — это zip: начинается с "PK".
@@ -413,13 +619,30 @@ module Dn1sup
       Dir.tmpdir
     end
 
-    def short_notes(text)
-      t = text.to_s.gsub("\r", '').strip
-      t = t.lines.first(8).join("\n")
-      if t.length > 500
-        t[0, 500].sub(/\s+\S*\z/, '').to_s + ' …'
+    # Краткая суть изменений для показа пользователю (уведомления, "Что нового"
+    # в каталоге): 1-3 строки без markdown, максимум ~200 символов.
+    # Подробности остаются в CHANGELOG.md/странице релиза GitHub.
+    def short_notes(text, max_len = 200)
+      t = text.to_s
+      t = t.gsub(/\r/, '')
+      t = t.gsub(/!\[[^\]]*\]\([^)]*\)/, '')          # ![img](…)
+      t = t.gsub(/\[([^\]]+)\]\([^)]*\)/, '\1')       # [text](url) -> text
+      t = t.gsub(/^#{Regexp.escape('#')}+\s*/, '')    # заголовки "# "
+      t = t.gsub(/^>\s*/, '')                         # цитаты
+      t = t.gsub(/^[-*+]\s+/, '')                     # маркеры списков
+      t = t.gsub(/\*\*/, '')                          # жирный
+      t = t.gsub(/[*`~]/, '')                         # курсив/код/зачёркивание
+
+
+      t = t.gsub(/<\/?[a-z][^>]*>/i, '')              # html-теги
+      lines = t.split(/\n+/).map { |l| l.squeeze(' ').strip }.reject(&:empty?)
+      out = lines.first(3).join("\n")
+      return '' if out.empty?
+      if out.length > max_len
+        cut = out[0, max_len].sub(/\s+\S*\z/, '')
+        "#{cut} …"
       else
-        t
+        out
       end
     end
 
@@ -445,12 +668,35 @@ module Dn1sup
     # Ошибки всегда дописываются в лог-файл (Sketchup.temp_dir/dn1sup_updater.log);
     # в консоль — только при включённом флаге debug в privatepref.
     def log_error(err)
-      append_log("#{Time.now.strftime('%Y-%m-%d %H:%M:%S')} #{err.class}: #{err.message}",
+      append_log("#{Time.now.strftime('%Y-%m-%d %H:%M:%S')} [ERROR] #{err.class}: #{err.message}",
                  err.backtrace.to_a.first(5))
       return unless debug?
 
       puts "DN1Sup Updater error: #{err.class}: #{err.message}"
       puts(err.backtrace.to_a.first(5).join("\n"))
+    rescue StandardError
+      nil
+    end
+
+    # Информационные записи о ключевых событиях (изменения, установка/удаление,
+    # открытие каталога) — всегда пишутся в краткий прикладной лог.
+    def log_info(message)
+      append_log("#{Time.now.strftime('%Y-%m-%d %H:%M:%S')} [INFO] #{message}", [])
+      return unless debug?
+
+      puts "DN1Sup Updater: #{message}"
+    rescue StandardError
+      nil
+    end
+
+    # Подробные записи (каждая команда UI, каждый сетевой запрос, отрисовка) —
+    # только в dev-режиме (Sketchup.write_default('Dn1supUpdater', 'debug', true))
+    # или в консоль при debug. В обычном прикладном логе не мусорят.
+    def log_debug(message)
+      return unless debug?
+
+      append_log("#{Time.now.strftime('%Y-%m-%d %H:%M:%S')} [DEBUG] #{message}", [])
+      puts "DN1Sup Updater (debug): #{message}"
     rescue StandardError
       nil
     end
@@ -461,9 +707,12 @@ module Dn1sup
     end
 
     def append_log(line, backtrace = [])
-      path = File.join(temp_dir, 'dn1sup_updater.log')
-      File.rename(path, "#{path}.old") if File.file?(path) && File.size(path) > LOG_SIZE_LIMIT
-      File.open(path, 'a') { |f| f.puts(line, *backtrace) }
+      @log_mutex ||= Mutex.new
+      @log_mutex.synchronize do
+        path = File.join(temp_dir, 'dn1sup_updater.log')
+        File.rename(path, "#{path}.old") if File.file?(path) && File.size(path) > LOG_SIZE_LIMIT
+        File.open(path, 'a') { |f| f.puts(line, *backtrace) }
+      end
     rescue StandardError
       nil
     end
