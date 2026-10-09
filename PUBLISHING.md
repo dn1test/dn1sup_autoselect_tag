@@ -116,7 +116,7 @@ end
 |---|---|
 | Имя `dn1sup_*` в аккаунте `dn1test` | ✅ `dn1test/dn1sup_autoselect_tag` |
 | Не archived | ✅ |
-| `registry.json` в корне `main` | ✅ (id, name, description, version 0.4.2) |
+| `registry.json` в корне `main` | ✅ (id, name, description, version 0.5.0) |
 | Стабильные релизы с `.rbz` | ✅ `dist/dn1sup_autoselect_tag-*.rbz` через CI |
 | Теги `vMAJOR.MINOR.PATCH` | ✅ (workflow на `v*`) |
 | Регистратор `<id>.rb` + `ext.id` | ✅ `dn1sup_autoselect_tag.rb`, `ext.id = 'dn1sup_autoselect_tag'` |
