@@ -86,3 +86,10 @@ MIT — см. файл [LICENSE](LICENSE).
 
 ## Автор
 DN1Sup <dn1codegen@gmail.com>
+
+---
+
+## Публикация на GitHub
+
+Как оформить репозиторий, чтобы DN1Sup Extension Store находил расширение,
+показывал его в каталоге и предлагал обновления, — см. [PUBLISHING.md](PUBLISHING.md).
