@@ -11,7 +11,7 @@ module Dn1sup
 
     extension = SketchupExtension.new('DN1Sup AutoSelect Tag', File.join(PLUGIN_ROOT, 'dn1sup_autoselect_tag', 'main'))
     extension.description = 'Автоматически назначает настраиваемые теги размерам, текстовым меткам и компонентам (по правилам «имя → тег»).'
-    extension.version     = '0.4.2'
+    extension.version     = '0.5.0'
     extension.creator     = 'DN1Sup'
     extension.copyright   = '2026 DN1Sup <dn1codegen@gmail.com> (MIT)'
     extension.id          = 'dn1sup_autoselect_tag' if extension.respond_to?(:id=)

@@ -2,7 +2,7 @@
   "id": "dn1sup_autoselect_tag",
   "display_name": "DN1Sup AutoSelect Tag",
   "namespace": "Dn1sup::AutoSelectTag",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "created_at": "2026-10-04",
   "scaffolded_by": "zcode"
 }

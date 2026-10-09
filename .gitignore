@@ -3,3 +3,6 @@ frontend/node_modules/
 _old/
 .zcode/
 
+# Собранный UI (результат `npm run build` во frontend/) — собирается локально и в CI
+/dn1sup_autoselect_tag/dn1sup_autoselect_tag/html/
+

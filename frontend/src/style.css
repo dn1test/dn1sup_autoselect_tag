@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Тёмная тема по классу .dark на <html>; переключается из App.vue */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Компактный скроллбар в духе диалоговых окон */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(161 161 170 / 0.4) transparent;
+}

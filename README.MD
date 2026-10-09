@@ -60,11 +60,12 @@ dn1sup_autoselect_tag/
   main.rb                          # логика: правила, обсерверы, меню, dev-reload
   config.rb                        # настройки (реестр SketchUp)
   settings_dialog.rb               # HtmlDialog настроек
-  html/index.html                  # UI настроек (Modus Bootstrap, тёмная тема)
+  html/index.html                  # UI настроек — СОБРАННЫЙ файл (Vue 3 + Tailwind, см. frontend/)
   dn1sup_updater.rb                # общий апдейтер (синхронизируется из монорепо)
   test/                            # мини-харнесс: ruby test/run_all.rb, ext_test в SketchUp
 archive/
   auto_tag_dimension_label.rb      # старая однофайловая версия 1.0 (не устанавливать!)
+frontend/                          # исходники UI (Vue 3 + Vite + Tailwind CSS)
 ```
 
 ## Разработка
@@ -74,6 +75,20 @@ archive/
 2. Установка в живой SketchUp: `ext_install dir=<папка>` (sketchup-mcp) или ручное копирование в `Plugins`.
 3. Перезагрузка без рестарта: `Dn1sup::AutoSelectTag.reload` в консоли SketchUp.
    (`ext_reload` не поддерживает вложенный неймспейс `Dn1sup::AutoSelectTag` — purge константы не срабатывает.)
+
+### UI настроек (frontend/)
+UI диалога настроек — Vue 3 + Tailwind CSS, собирается Vite'ом в один
+самодостаточный `html/index.html` (протокол с Ruby не менялся:
+`sketchup.call_ruby('ready'|'save'|'cancel')` и `window.loadSettings(data)`).
+```bash
+cd frontend
+npm install
+npm run dev     # дев-сервер с мок-данными для вёрстки в браузере
+npm run build   # собрать html/index.html в папку расширения
+```
+Собранный `html/index.html` в git не хранится — он собирается локально и в CI
+(release-workflow запускает `npm ci && npm run build` перед `tools/pack.rb`).
+Для работы расширения из свежего клона сначала выполните сборку UI.
 
 Актуальную версию монорепо не забывать синхронизировать обратно (`src/`,
 `registry.json`, сборка `tools/pack.rb dn1sup_autoselect_tag`).

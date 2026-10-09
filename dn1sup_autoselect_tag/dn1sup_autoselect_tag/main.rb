@@ -16,7 +16,7 @@ module Dn1sup
 
   module AutoSelectTag
     ID      = 'dn1sup_autoselect_tag'
-    VERSION = '0.4.2'
+    VERSION = '0.5.0'
     REPO    = 'dn1test/dn1sup_autoselect_tag'
     ASSET   = "#{ID}.rbz"
     PAGE_URL = "https://github.com/#{REPO}/releases"
