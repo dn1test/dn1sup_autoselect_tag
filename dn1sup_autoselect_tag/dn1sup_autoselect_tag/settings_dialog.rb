@@ -69,7 +69,9 @@ module Dn1sup
           dimension: Config.tag_dimension,
           label:     Config.tag_label,
           rules:     Config.name_rules.map { |rule| { trigger: rule[:words].join(', '), tag: rule[:tag] } },
-          tags:      Sketchup.active_model.layers.map(&:name).sort
+          tags:      Sketchup.active_model.layers.map(&:name).sort,
+          # загружен именно dev-вариант (Plugins/<id>_dev) — бейдж DEV в шапке
+          dev_build: DEV_BUILD
         }
         @dialog.execute_script("window.loadSettings(#{JSON.generate(data)});")
       end

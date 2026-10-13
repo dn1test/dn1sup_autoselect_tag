@@ -9,6 +9,7 @@ const dimension = ref('')
 const label = ref('')
 const rules = ref([])
 const tags = ref([])
+const devBuild = ref(false) // загружен dev-вариант (Plugins/<id>_dev) — бейдж DEV в шапке
 
 // Ruby -> JS: настройки, правила и список тегов активной модели.
 function handleSettings(data) {
@@ -19,6 +20,7 @@ function handleSettings(data) {
     tag: rule.tag || ''
   }))
   tags.value = data.tags || []
+  devBuild.value = Boolean(data.dev_build)
 }
 
 function save() {
@@ -97,7 +99,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
     <header
       class="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-700/60"
     >
-      <h1 class="text-sm font-semibold tracking-tight">Настройки автоназначения</h1>
+      <div class="flex items-center gap-2">
+        <h1 class="text-sm font-semibold tracking-tight">Настройки автоназначения</h1>
+        <span
+          v-if="devBuild"
+          class="rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-bold tracking-wide text-amber-700"
+          title="Работает dev-вариант (рабочая копия sketchup-dev-mcp), не релиз"
+        >DEV</span>
+      </div>
       <button
         type="button"
         :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'"
