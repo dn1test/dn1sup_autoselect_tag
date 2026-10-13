@@ -39,6 +39,11 @@ function cancel() {
   callRuby('cancel')
 }
 
+// Проверка обновления: сначала локальная папка разработки, потом GitHub.
+function checkUpdate() {
+  callRuby('check_update')
+}
+
 function addRule() {
   rules.value.push({ trigger: '', tag: '' })
   nextTick(() => {
@@ -100,9 +105,22 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
       <div class="flex items-center gap-2">
         <h1 class="text-sm font-semibold tracking-tight">Настройки автоназначения</h1>
       </div>
-      <button
-        type="button"
-        :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'"
+      <div class="flex items-center gap-1">
+        <button
+          type="button"
+          title="Проверить обновление: сначала локальная папка разработки, потом GitHub"
+          aria-label="Проверить обновление"
+          class="rounded-full p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-sky-600 dark:text-zinc-400 dark:hover:bg-zinc-700/70 dark:hover:text-sky-400"
+          @click="checkUpdate"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'"
         :aria-label="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'"
         class="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700/70 dark:hover:text-zinc-200"
         @click="toggleTheme"
@@ -115,6 +133,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
         </svg>
       </button>
+      </div>
     </header>
 
     <main class="flex-1 space-y-5 overflow-y-auto px-4 py-4">

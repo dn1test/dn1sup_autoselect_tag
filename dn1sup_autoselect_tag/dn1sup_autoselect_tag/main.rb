@@ -20,7 +20,10 @@ module Dn1sup
     REPO    = 'dn1test/dn1sup_autoselect_tag'
     ASSET   = "#{ID}.rbz"
     PAGE_URL = "https://github.com/#{REPO}/releases"
-    MANIFEST = { id: ID, repo: REPO, version: VERSION, asset: ASSET }.freeze
+    # Папка разработки задана в самом расширении (корень репозитория):
+    # проверка обновления сначала смотрит её, потом GitHub.
+    DEV_DIR  = File.expand_path('../..', File.dirname(__FILE__)).freeze
+    MANIFEST = { id: ID, repo: REPO, version: VERSION, asset: ASSET, dev_dir: DEV_DIR }.freeze
 
     PLUGIN_DIR = File.dirname(__FILE__).freeze
 
@@ -295,7 +298,7 @@ module Dn1sup
         end
         menu.add_separator
         menu.add_item('Проверить обновления сейчас') do
-          Dn1sup::Updater.check!(Dn1sup::AutoSelectTag::MANIFEST.merge(force: true, async: true))
+          Dn1sup::Updater.check_local_first!(Dn1sup::AutoSelectTag::MANIFEST.merge(force: true, async: true))
         end
         menu.add_item('Страница релизов на GitHub') { UI.openURL(Dn1sup::AutoSelectTag::PAGE_URL) }
       end
@@ -306,7 +309,7 @@ module Dn1sup
       $dn1sup_autoselect_startup_check = true
       $dn1sup_autoselect_timer_id = UI.start_timer(15, false) do
         $dn1sup_autoselect_timer_id = nil
-        Dn1sup::Updater.check!(Dn1sup::AutoSelectTag::MANIFEST.merge(async: true))
+        Dn1sup::Updater.check_local_first!(Dn1sup::AutoSelectTag::MANIFEST.merge(async: true))
       end
     end
 

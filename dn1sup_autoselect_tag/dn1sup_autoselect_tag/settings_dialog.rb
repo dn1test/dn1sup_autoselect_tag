@@ -52,6 +52,14 @@ module Dn1sup
         when 'ready'  then push_settings
         when 'save'   then apply_settings(args[0])
         when 'cancel' then close
+        when 'check_update'
+          # Кнопка «круг со стрелками» в шапке: сначала локальная папка,
+          # потом GitHub — ставится свежайшее.
+          if defined?(Dn1sup::Updater)
+            Dn1sup::Updater.check_local_first!(Dn1sup::AutoSelectTag::MANIFEST.merge(force: true, async: true))
+          else
+            UI.openURL(Dn1sup::AutoSelectTag::PAGE_URL)
+          end
         end
       rescue StandardError => e
         UI.messagebox("DN1Sup AutoSelect Tag: #{e.class}: #{e.message}")
