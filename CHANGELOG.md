@@ -3,6 +3,14 @@
 Лог изменений **DN1Sup AutoSelect Tag** (`dn1sup_autoselect_tag`).
 Формат версий соответствует правилам `MAJOR.MINOR.PATCH`.
 
+## [0.6.0] — 2026-10-13
+
+- Удалён функционал dev/prod (второй id `dn1sup_autoselect_tag_dev`): удалены
+  `DEV_BUILD`, поле `dev_build` в данных диалога и бейдж DEV в шапке настроек.
+  Разработка — рабочая копия под тем же id с перезагрузкой
+  `Dn1sup::AutoSelectTag.reload`; self-update рабочей копии отключён по пути
+  загрузки (`Dn1sup::Updater.dev_source?`); файлы `.sketchup_dev.json` удалены.
+
 ## [0.5.0] — 2026-10-09
 
 - feat(ui): rewrite settings dialog in Vue 3 + Tailwind; v0.5.0

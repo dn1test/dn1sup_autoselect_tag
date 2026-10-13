@@ -9,7 +9,6 @@ const dimension = ref('')
 const label = ref('')
 const rules = ref([])
 const tags = ref([])
-const devBuild = ref(false) // загружен dev-вариант (Plugins/<id>_dev) — бейдж DEV в шапке
 
 // Ruby -> JS: настройки, правила и список тегов активной модели.
 function handleSettings(data) {
@@ -20,7 +19,6 @@ function handleSettings(data) {
     tag: rule.tag || ''
   }))
   tags.value = data.tags || []
-  devBuild.value = Boolean(data.dev_build)
 }
 
 function save() {
@@ -101,11 +99,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
     >
       <div class="flex items-center gap-2">
         <h1 class="text-sm font-semibold tracking-tight">Настройки автоназначения</h1>
-        <span
-          v-if="devBuild"
-          class="rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-bold tracking-wide text-amber-700"
-          title="Работает dev-вариант (рабочая копия sketchup-dev-mcp), не релиз"
-        >DEV</span>
       </div>
       <button
         type="button"

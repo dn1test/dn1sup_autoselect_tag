@@ -16,15 +16,13 @@ module Dn1sup
 
   module AutoSelectTag
     ID      = 'dn1sup_autoselect_tag'
-    VERSION = '0.5.1'
+    VERSION = '0.6.0'
     REPO    = 'dn1test/dn1sup_autoselect_tag'
     ASSET   = "#{ID}.rbz"
     PAGE_URL = "https://github.com/#{REPO}/releases"
     MANIFEST = { id: ID, repo: REPO, version: VERSION, asset: ASSET }.freeze
 
     PLUGIN_DIR = File.dirname(__FILE__).freeze
-    # DEV-вариант живёт в Plugins/<id>_dev/ — признак по имени корневой папки
-    DEV_BUILD = File.basename(PLUGIN_DIR).end_with?('_dev').freeze
 
     Sketchup.require 'dn1sup_autoselect_tag/dn1sup_updater'
     Sketchup.require 'dn1sup_autoselect_tag/config'

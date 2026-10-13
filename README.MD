@@ -69,8 +69,7 @@ frontend/                          # исходники UI (Vue 3 + Vite + Tailw
 ```
 
 ## Разработка
-Папка — dev-копия (манифест `.sketchup_dev.json` внутри `dn1sup_autoselect_tag/dn1sup_autoselect_tag/`),
-раскладка и структура совпадают с монорепо `dn1sup_extensions/src/dn1sup_autoselect_tag`. Цикл:
+Рабочая копия репозитория (один id, без `_dev`-двойников). Цикл:
 1. Правка файлов в этой папке.
 2. Установка в живой SketchUp: `ext_install dir=<папка>` (sketchup-mcp) или ручное копирование в `Plugins`.
 3. Перезагрузка без рестарта: `Dn1sup::AutoSelectTag.reload` в консоли SketchUp.
