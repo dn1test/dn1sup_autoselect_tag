@@ -2,6 +2,7 @@
   {
     "id": "dn1sup_autoselect_tag",
     "name": "DN1Sup AutoSelect Tag",
+    "author": "DN1Sup",
     "description": "Автоматически назначает настраиваемые теги размерам, текстовым меткам и компонентам (по правилам «имя → тег»).",
     "repo": "dn1test/dn1sup_autoselect_tag",
     "version": "0.6.0"
