@@ -103,6 +103,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
       class="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-700/60"
     >
       <div class="flex items-center gap-2">
+        <img src="./assets/logo.svg" width="28" height="28" class="shrink-0" alt="DN1Sup AutoSelect Tag">
         <h1 class="text-sm font-semibold tracking-tight">Настройки автоназначения</h1>
       </div>
       <div class="flex items-center gap-1">

@@ -3,6 +3,12 @@
 Лог изменений **DN1Sup AutoSelect Tag** (`dn1sup_autoselect_tag`).
 Формат версий соответствует правилам `MAJOR.MINOR.PATCH`.
 
+## [0.6.4] — 2026-10-16
+
+### DN1Sup AutoSelect Tag (v0.6.4)
+- **Фирменная плитка DN1Sup в шапке GUI** — та же плитка, что в каталоге
+  Extension Store (цветной квадрат, знак с «воздухом»); работает в светлой
+  и тёмной теме. Источник — `dn1sup_extensions` (`tools/make_icons.rb`).
 ## [0.6.3] — 2026-10-16
 
 ### DN1Sup AutoSelect Tag (v0.6.3)
