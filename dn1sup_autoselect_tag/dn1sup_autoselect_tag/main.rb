@@ -16,7 +16,7 @@ module Dn1sup
 
   module AutoSelectTag
     ID      = 'dn1sup_autoselect_tag'
-    VERSION = '0.6.1'
+    VERSION = '0.6.2'
     REPO    = 'dn1test/dn1sup_autoselect_tag'
     ASSET   = "#{ID}.rbz"
     PAGE_URL = "https://github.com/#{REPO}/releases"
@@ -26,6 +26,9 @@ module Dn1sup
     MANIFEST = { id: ID, repo: REPO, version: VERSION, asset: ASSET, dev_dir: DEV_DIR }.freeze
 
     PLUGIN_DIR = File.dirname(__FILE__).freeze
+
+    TOOLBAR_NAME = 'DN1Sup AutoSelect Tag'
+    CMD_TOOLTIP  = 'DN1Sup AutoSelect Tag — настройки правил автоназначения тегов'
 
     Sketchup.require 'dn1sup_autoselect_tag/dn1sup_updater'
     Sketchup.require 'dn1sup_autoselect_tag/config'
@@ -279,7 +282,38 @@ module Dn1sup
       Dn1sup.common_menu
     end
 
-    # Устанавливает меню, наблюдателей и отложенную проверку обновлений;
+    # Команда тулбара: открывает диалог настроек (как пункт меню «Настройки...»).
+    def autoselect_command
+      cmd = UI::Command.new('AutoSelect Tag') { Dn1sup::AutoSelectTag::SettingsDialog.show }
+      cmd.menu_text       = 'Настройки...'
+      cmd.tooltip         = CMD_TOOLTIP
+      cmd.status_bar_text = 'AutoSelect Tag: настройка правил автоназначения тегов'
+      cmd.small_icon      = icon_path
+      cmd.large_icon      = icon_path
+      cmd
+    rescue StandardError
+      nil
+    end
+
+    # SVG-иконка поддерживается тулбарами начиная с SketchUp 2020.1.
+    def icon_path
+      File.join(PLUGIN_DIR, 'icons', 'tag.svg')
+    end
+
+    def setup_toolbar
+      toolbar = UI::Toolbar.new(TOOLBAR_NAME)
+      return if toolbar.any? { |c| c.respond_to?(:tooltip) && c.tooltip == CMD_TOOLTIP }
+
+      cmd = autoselect_command
+      return unless cmd
+
+      toolbar.add_item(cmd)
+      toolbar.restore
+    rescue StandardError
+      nil
+    end
+
+    # Устанавливает меню, тулбар, наблюдателей и отложенную проверку обновлений;
     # вызывается при каждой загрузке файла — повторный вход безопасен.
     # Своё подменю охраняет @menu_autoselect_tag (глобал переживает
     # перезагрузку, подменю создаётся один раз за сессию), а пункты
@@ -302,6 +336,8 @@ module Dn1sup
         end
         menu.add_item('Страница релизов на GitHub') { UI.openURL(Dn1sup::AutoSelectTag::PAGE_URL) }
       end
+
+      setup_toolbar
 
       # Фоновая проверка обновлений один раз за сессию (не раньше, чем через
       # 15 секунд, чтобы не мешать загрузке SketchUp и сети).

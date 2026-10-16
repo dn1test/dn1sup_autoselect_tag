@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <defs>
+    <linearGradient id="tagBlue" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#36abf7"/><stop offset="100%" stop-color="#0c8ee9"/></linearGradient>
+    <linearGradient id="tagBadge" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#22c55e"/><stop offset="100%" stop-color="#16a34a"/></linearGradient>
+  </defs>
+  <path d="M3.5 3.5h6.8l10.2 10.2-6.8 6.8L3.5 10.3Z" fill="url(#tagBlue)"/>
+  <circle cx="8" cy="8" r="1.6" fill="#ffffff"/>
+  <line x1="7" y1="13" x2="12.5" y2="13" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="9" y1="16" x2="14" y2="16" stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity=".75"/>
+  <circle cx="17" cy="17" r="4.6" fill="url(#tagBadge)"/>
+  <path d="M17 14.2c.3 1.6.9 2.4 2.8 2.8-1.9.4-2.5 1.2-2.8 2.8-.3-1.6-.9-2.4-2.8-2.8 1.9-.4 2.5-1.2 2.8-2.8Z" fill="#ffffff"/>
+</svg>
