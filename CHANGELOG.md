@@ -3,6 +3,15 @@
 Лог изменений **DN1Sup AutoSelect Tag** (`dn1sup_autoselect_tag`).
 Формат версий соответствует правилам `MAJOR.MINOR.PATCH`.
 
+## [0.6.3] — 2026-10-16
+
+### DN1Sup AutoSelect Tag (v0.6.3)
+- **Фирменный знак тулбара DN1Sup** — единый стиль каталога Extension
+  Store: бирка с искрой «авто» (violet), прозрачный фон, вырезы — настоящая прозрачность
+  (SVG-маска; PNG 16/24 — альфа-канал). Источник знака —
+  `dn1sup_extensions` → `icons/products/` (`tools/make_icons.rb`).
+
+
 ## [0.6.2] — 2026-10-16
 
 - Добавлен тулбар «DN1Sup AutoSelect Tag» с иконкой `icons/tag.svg`
