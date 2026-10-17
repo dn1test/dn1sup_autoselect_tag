@@ -53,10 +53,9 @@ module Dn1sup
         when 'save'   then apply_settings(args[0])
         when 'cancel' then close
         when 'check_update'
-          # Кнопка «круг со стрелками» в шапке: сначала локальная папка,
-          # потом GitHub — ставится свежайшее.
+          # Кнопка «круг со стрелками» в шапке: проверка релизов на GitHub.
           if defined?(Dn1sup::Updater)
-            Dn1sup::Updater.check_local_first!(Dn1sup::AutoSelectTag::MANIFEST.merge(force: true, async: true))
+            Dn1sup::Updater.check!(Dn1sup::AutoSelectTag::MANIFEST.merge(force: true, async: true))
           else
             UI.openURL(Dn1sup::AutoSelectTag::PAGE_URL)
           end
