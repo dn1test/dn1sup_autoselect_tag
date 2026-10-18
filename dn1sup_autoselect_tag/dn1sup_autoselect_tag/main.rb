@@ -16,7 +16,7 @@ module Dn1sup
 
   module AutoSelectTag
     ID      = 'dn1sup_autoselect_tag'
-    VERSION = '0.6.4'
+    VERSION = '0.6.6'
     REPO    = 'dn1test/dn1sup_autoselect_tag'
     ASSET   = "#{ID}.rbz"
     PAGE_URL = "https://github.com/#{REPO}/releases"
@@ -300,6 +300,14 @@ module Dn1sup
     end
 
     def setup_toolbar
+      # Общая панель DN1Sup дублирует эту кнопку: пока не включён параметр
+      # «Показывать отдельные тулбары расширений», свой тулбар не создаём —
+      # тогда его нет и в списке панелей SketchUp.
+      if Sketchup.respond_to?(:read_default) &&
+         !Sketchup.read_default('DN1Sup ExtManager', 'shared_toolbar_show_individual')
+        return
+      end
+
       toolbar = UI::Toolbar.new(TOOLBAR_NAME)
       return if toolbar.any? { |c| c.respond_to?(:tooltip) && c.tooltip == CMD_TOOLTIP }
 
