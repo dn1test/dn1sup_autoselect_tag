@@ -59,6 +59,8 @@ module Dn1sup
           else
             UI.openURL(Dn1sup::AutoSelectTag::PAGE_URL)
           end
+        when 'open_releases'
+          UI.openURL(Dn1sup::AutoSelectTag::PAGE_URL)
         end
       rescue StandardError => e
         UI.messagebox("DN1Sup AutoSelect Tag: #{e.class}: #{e.message}")
@@ -76,7 +78,8 @@ module Dn1sup
           dimension: Config.tag_dimension,
           label:     Config.tag_label,
           rules:     Config.name_rules.map { |rule| { trigger: rule[:words].join(', '), tag: rule[:tag] } },
-          tags:      Sketchup.active_model.layers.map(&:name).sort
+          tags:      Sketchup.active_model.layers.map(&:name).sort,
+          version:   Dn1sup::AutoSelectTag::VERSION
         }
         @dialog.execute_script("window.loadSettings(#{JSON.generate(data)});")
       end
@@ -91,6 +94,7 @@ module Dn1sup
         Config.tag_dimension = data['dimension']
         Config.tag_label     = data['label']
         Config.name_rules    = data['rules']
+        AutoSelectTag.report_status('DN1Sup AutoSelect Tag: настройки сохранены')
         close
         offer_retag
       end
@@ -100,7 +104,10 @@ module Dn1sup
           "Настройки сохранены.\r\n\r\nПрименить их к существующим размерам, меткам и компонентам в модели?",
           MB_YESNO
         )
-        retag_existing(Sketchup.active_model) if answer == IDYES
+        return unless answer == IDYES
+
+        count = AutoSelectTag.retag_existing(Sketchup.active_model)
+        AutoSelectTag.report_status("DN1Sup AutoSelect Tag: перенесено в теги: #{count}")
       end
     end
   end

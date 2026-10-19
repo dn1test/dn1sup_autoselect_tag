@@ -4,11 +4,36 @@ import { announceReady, callRuby, onSettings } from './bridge'
 import { applyTheme, loadTheme, saveTheme } from './theme'
 import TagField from './components/TagField.vue'
 import RuleRow from './components/RuleRow.vue'
+import HelpDialog from './components/HelpDialog.vue'
+import StatusBar from './components/StatusBar.vue'
 
 const dimension = ref('')
 const label = ref('')
 const rules = ref([])
 const tags = ref([])
+const version = ref('')
+const helpOpen = ref(false)
+const updateBusy = ref(false)
+// Статусная строка: подсказка слева, состояние работы справа.
+const HINT_DEFAULT = 'Готово. Enter — сохранить, Esc — отмена.'
+const HINTS = {
+  dimension: 'Тег размеров: выберите из списка или впишите новый — создастся при первом назначении.',
+  label: 'Тег текстовых меток: выберите из списка или впишите новый.',
+  trigger: 'Триггеры через запятую или точку с запятой. Совпадение — без учёта регистра.',
+  tag: 'Целевой тег правила: выберите из списка или впишите новый.',
+  add: 'Добавить новое правило «слова-триггеры → тег».',
+  save: 'Сохранить настройки и предложить применить их к модели.',
+  cancel: 'Закрыть без сохранения.'
+}
+const hint = ref(HINT_DEFAULT)
+const statusText = ref('Готов')
+function setHint(key) {
+  hint.value = HINTS[key] || HINT_DEFAULT
+}
+function resetHint() {
+  hint.value = HINT_DEFAULT
+}
+let updateTimer = null
 
 // Ruby -> JS: настройки, правила и список тегов активной модели.
 function handleSettings(data) {
@@ -19,9 +44,15 @@ function handleSettings(data) {
     tag: rule.tag || ''
   }))
   tags.value = data.tags || []
+  if (data.version) version.value = String(data.version)
+  updateBusy.value = false
+  statusText.value = `Готов · правил: ${rules.value.length}`
+  hint.value = HINT_DEFAULT
 }
 
 function save() {
+  statusText.value = 'Сохранение…'
+  hint.value = 'Сохраняем настройки…'
   callRuby(
     'save',
     JSON.stringify({
@@ -42,10 +73,21 @@ function cancel() {
 // Проверка обновления: сначала локальная папка разработки, потом GitHub.
 function checkUpdate() {
   callRuby('check_update')
+  updateBusy.value = true
+  statusText.value = 'Проверка обновлений…'
+  hint.value = 'Проверяем обновления: сначала локальная папка, потом GitHub.'
+  clearTimeout(updateTimer)
+  updateTimer = setTimeout(() => {
+    updateBusy.value = false
+    statusText.value = `Готов · правил: ${rules.value.length}`
+    hint.value = HINT_DEFAULT
+  }, 2500)
 }
 
 function addRule() {
   rules.value.push({ trigger: '', tag: '' })
+  statusText.value = `Черновик · правил: ${rules.value.length}`
+  hint.value = HINTS.trigger
   nextTick(() => {
     const inputs = document.querySelectorAll('[data-rule-trigger]')
     inputs[inputs.length - 1]?.focus()
@@ -83,6 +125,7 @@ onMounted(() => {
     handleSettings({
       dimension: 'Dimension',
       label: 'Label',
+      version: '0.6.7',
       rules: [
         { trigger: 'дверь, дверь двусторонняя', tag: 'Двери' },
         { trigger: 'фасад', tag: 'Фасады' }
@@ -97,24 +140,43 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 
 <template>
   <div
-    class="flex h-screen flex-col bg-zinc-100 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+    class="flex h-screen flex-col bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-200"
   >
     <header
-      class="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-700/60"
+      class="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
     >
-      <div class="flex items-center gap-2">
+      <div class="flex min-w-0 items-center gap-2.5">
         <img src="./assets/logo.svg" width="28" height="28" class="shrink-0" alt="DN1Sup AutoSelect Tag">
-        <h1 class="text-sm font-semibold tracking-tight">Настройки автоназначения</h1>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <h1 class="text-sm font-semibold leading-tight text-slate-800 dark:text-slate-100">DN1Sup AutoSelect Tag</h1>
+            <span v-if="version" class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-slate-800">v{{ version }}</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Автоназначение тегов размерам, меткам и компонентам</p>
+        </div>
       </div>
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-1.5">
+        <button
+          type="button"
+          title="Справка"
+          aria-label="Справка"
+          class="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-sky-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-sky-400"
+          @click="helpOpen = true"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <path d="M12 17h.01" />
+          </svg>
+        </button>
         <button
           type="button"
           title="Проверить обновление: сначала локальная папка разработки, потом GitHub"
           aria-label="Проверить обновление"
-          class="rounded-full p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-sky-600 dark:text-zinc-400 dark:hover:bg-zinc-700/70 dark:hover:text-sky-400"
+          class="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-sky-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-sky-400"
           @click="checkUpdate"
         >
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="h-4 w-4" :class="{ 'animate-spin': updateBusy }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
             <path d="M21 3v5h-5" />
           </svg>
@@ -123,7 +185,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
           type="button"
           :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'"
         :aria-label="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'"
-        class="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700/70 dark:hover:text-zinc-200"
+        class="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-sky-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-sky-400"
         @click="toggleTheme"
       >
         <svg v-if="theme === 'dark'" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -139,24 +201,28 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 
     <main class="flex-1 space-y-5 overflow-y-auto px-4 py-4">
       <section class="space-y-3">
-        <h2 class="text-sm font-semibold">Теги автоназначения</h2>
-        <TagField v-model="dimension" label="Тег размеров" placeholder="Dimension" />
-        <TagField v-model="label" label="Тег текстовых меток" placeholder="Label" />
-        <p class="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+        <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Теги автоназначения</h2>
+        <TagField v-model="dimension" label="Тег размеров" placeholder="Dimension" @field-focus="setHint('dimension')" @field-blur="resetHint" />
+        <TagField v-model="label" label="Тег текстовых меток" placeholder="Label" @field-focus="setHint('label')" @field-blur="resetHint" />
+        <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
           Выберите существующий тег из списка или впишите новое имя — тег создастся
           при первом назначении.
         </p>
       </section>
 
-      <hr class="border-zinc-200 dark:border-zinc-700/60" />
+      <hr class="border-slate-200 dark:border-slate-800" />
 
       <section class="space-y-2.5">
         <div class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold">Правила по имени компонента</h2>
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Правила по имени компонента</h2>
           <button
             type="button"
             class="rounded-md px-2 py-1 text-xs font-medium text-sky-600 transition-colors hover:bg-sky-500/10 dark:text-sky-400 dark:hover:bg-sky-400/10"
             @click="addRule"
+            @mouseenter="setHint('add')"
+            @mouseleave="resetHint"
+            @focus="setHint('add')"
+            @blur="resetHint"
           >
             + Добавить правило
           </button>
@@ -165,7 +231,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
         <div class="space-y-2">
           <p
             v-if="rules.length === 0"
-            class="rounded-md border border-dashed border-zinc-300 px-3 py-3 text-xs text-zinc-500 dark:border-zinc-600/70 dark:text-zinc-400"
+            class="rounded-md border border-dashed border-slate-300 px-3 py-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400"
           >
             Правил нет. Добавьте правило — и компоненты с подходящим именем будут
             переноситься в его тег.
@@ -176,10 +242,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
             v-model:trigger="rule.trigger"
             v-model:tag="rule.tag"
             @remove="rules.splice(index, 1)"
+            @focus-field="setHint"
+            @field-blur="resetHint"
           />
         </div>
 
-        <p class="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+        <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
           Компонент, в имени экземпляра или определения которого есть любое из
           слов-триггеров (без учёта регистра), переносится в тег правила. Правила
           проверяются сверху вниз — первое совпадение выигрывает.
@@ -188,12 +256,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
     </main>
 
     <footer
-      class="flex shrink-0 justify-end gap-2 border-t border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-700/60 dark:bg-zinc-800/40"
+      class="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
     >
       <button
         type="button"
-        class="rounded-md border border-zinc-300 px-3.5 py-1.5 text-sm font-medium transition-colors hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-zinc-600 dark:hover:bg-zinc-700/70 dark:focus:ring-sky-400/40"
+        class="rounded-md border border-slate-300 px-3.5 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-700 dark:hover:bg-slate-800 dark:focus:ring-sky-400/40"
         @click="cancel"
+        @mouseenter="setHint('cancel')"
+        @mouseleave="resetHint"
+        @focus="setHint('cancel')"
+        @blur="resetHint"
       >
         Отмена
       </button>
@@ -201,11 +273,19 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
         type="button"
         class="rounded-md bg-sky-600 px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:bg-sky-500 dark:hover:bg-sky-400"
         @click="save"
+        @mouseenter="setHint('save')"
+        @mouseleave="resetHint"
+        @focus="setHint('save')"
+        @blur="resetHint"
       >
         Сохранить
       </button>
     </footer>
+
+    <StatusBar :hint="hint" :status="statusText" :busy="updateBusy" />
   </div>
+
+  <HelpDialog v-if="helpOpen" :version="version" @close="helpOpen = false" />
 
   <datalist id="tag-options">
     <option v-for="name in tags" :key="name" :value="name" />

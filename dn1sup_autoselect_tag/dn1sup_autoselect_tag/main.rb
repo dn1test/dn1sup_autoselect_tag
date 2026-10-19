@@ -16,7 +16,7 @@ module Dn1sup
 
   module AutoSelectTag
     ID      = 'dn1sup_autoselect_tag'
-    VERSION = '0.6.6'
+    VERSION = '0.6.7'
     REPO    = 'dn1test/dn1sup_autoselect_tag'
     ASSET   = "#{ID}.rbz"
     PAGE_URL = "https://github.com/#{REPO}/releases"
@@ -125,10 +125,13 @@ module Dn1sup
       @flush_scheduled = false
       pending = @pending
       @pending = []
+      assigned = 0
       pending.each do |model, entity|
         next if entity.respond_to?(:deleted?) && entity.deleted?
-        assign_tag(model, entity, tag_name_for(entity))
+        assigned += 1 if assign_tag(model, entity, tag_name_for(entity))
       end
+      report_status("DN1Sup AutoSelect Tag: назначено тегов: #{assigned}") if assigned.positive?
+      assigned
     rescue StandardError
       nil
     end
@@ -168,10 +171,19 @@ module Dn1sup
     def apply_rules_to_model
       model = Sketchup.active_model
       return if model.nil?
+      report_status('DN1Sup AutoSelect Tag: применение правил…')
       count = retag_existing(model)
+      report_status("DN1Sup AutoSelect Tag: перенесено в теги: #{count}")
       UI.messagebox("DN1Sup AutoSelect Tag\r\n\r\nПеренесено в теги: #{count}")
     rescue StandardError => e
       UI.messagebox("DN1Sup AutoSelect Tag: #{e.class}: #{e.message}")
+    end
+
+    # Работа приложения в статус-баре SketchUp. Вне SketchUp (тесты) — молча.
+    def report_status(text)
+      Sketchup.status_text = text if defined?(Sketchup) && Sketchup.respond_to?(:status_text=)
+    rescue StandardError
+      nil
     end
 
     # --- Наблюдатели ----------------------------------------------------------
